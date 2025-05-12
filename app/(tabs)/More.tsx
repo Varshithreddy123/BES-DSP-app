@@ -9,7 +9,7 @@ const menuOptions = [
   { id: 3, title: 'My Team', icon: 'people-outline', type: 'Ionicons', path: '/Screens/team' },
   { id: 4, title: 'Revenue', icon: 'trending-up', type: 'Ionicons', path: '/Screens/revenue' },
   { id: 5, title: 'Pilots', icon: 'id-card', type: 'FontAwesome5', path: '/Screens/pilots' },
-  { id: 6, title: 'My Services', icon: 'link', type: 'MaterialCommunityIcons', path: '/Screens/services' },
+  { id: 6, title: 'My Services', icon: 'link', type: 'MaterialCommunityIcons', path: '/Screens/service' },
   { id: 7, title: 'Manage Coupons', icon: 'ticket-percent', type: 'MaterialCommunityIcons', path: '/Screens/coupons' },
   { id: 8, title: 'Invoice', icon: 'file-document-outline', type: 'MaterialCommunityIcons', path: '/Screens/invoice' },
 ];

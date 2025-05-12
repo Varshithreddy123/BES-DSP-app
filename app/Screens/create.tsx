@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   ScrollView,
   Switch,
   Platform,
-  Modal
+  Modal,
+  BackHandler,
+  StatusBar
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -16,15 +18,39 @@ import { useNavigation } from '@react-navigation/native';
 
 const CreateCouponPage: React.FC = () => {
   const navigation = useNavigation();
-
   const [isPublic, setIsPublic] = useState<boolean>(true);
   const [selectedTab, setSelectedTab] = useState<'percentage' | 'rupees'>('percentage');
   const [locationSpecific, setLocationSpecific] = useState<boolean>(false);
-
   const [fromDate, setFromDate] = useState<Date>(new Date());
   const [toDate, setToDate] = useState<Date>(new Date());
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
+
+  // Handle hardware back button (Android)
+  useEffect(() => {
+    const backAction = () => {
+      handleGoBack();
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction,
+    );
+
+    return () => backHandler.remove();
+  }, []);
+
+  const handleGoBack = () => {
+    // Ensure the navigation action is properly handled
+    try {
+      navigation.goBack();
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // Fallback if navigation.goBack() fails
+      navigation.navigate('Home'); // Replace 'Home' with your actual starting screen
+    }
+  };
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-IN', {
@@ -38,7 +64,14 @@ const CreateCouponPage: React.FC = () => {
     <ScrollView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={handleGoBack}
+          testID="back-button"
+          accessible={true}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
           <Icon name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Coupon</Text>
@@ -189,7 +222,6 @@ const CreateCouponPage: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  // ... [same styles as in your original code] ...
   container: {
     flex: 1,
     backgroundColor: 'white',
@@ -200,9 +232,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   backButton: {
     marginRight: 16,
+    padding: 8, // Increased touch target
   },
   backButtonText: {
     fontSize: 24,
@@ -334,6 +368,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
+    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
 });
 

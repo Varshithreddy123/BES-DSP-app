@@ -175,7 +175,7 @@ export default function CustomersPage() {
               </View>
             </View>
             <View style={styles.serviceCount}>
-              <FontAwesome5 name="drone" size={14} color="#1976D2" />
+              <FontAwesome5 name="fan" size={14} color="#1976D2" />
               <Text style={styles.requestCount}>{item.requestCount}</Text>
             </View>
           </TouchableOpacity>
