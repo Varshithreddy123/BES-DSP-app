@@ -191,9 +191,9 @@ const LocationsPage: React.FC = () => {
           style={styles.backButton}
         >
           <Ionicons 
-            name={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'} 
+            name={Platform.OS === 'android' ? 'chevron-back' : 'chevron-left'} 
             size={24} 
-            color="#3b82f6" 
+            color="black" 
           />
         </TouchableOpacity>
         

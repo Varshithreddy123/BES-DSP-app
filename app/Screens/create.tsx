@@ -48,7 +48,7 @@ const CreateCouponPage: React.FC = () => {
     } catch (error) {
       console.error('Navigation error:', error);
       // Fallback if navigation.goBack() fails
-      navigation.navigate('Home'); // Replace 'Home' with your actual starting screen
+      navigation.navigate('Home' as never); // Ensure 'Home' is a valid route in your navigation configuration
     }
   };
 

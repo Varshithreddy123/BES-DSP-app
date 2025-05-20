@@ -108,9 +108,9 @@ export default function CustomersPage() {
       {/* Header with Stack */}
       <Stack.Screen
         options={{
-          headerStyle: { backgroundColor: '#1976D2' },
+          headerStyle: { backgroundColor: 'white' },
           headerTitle: "AgriDrone Customers",
-          headerTitleStyle: { color: 'white', fontSize: 20, fontWeight: '600' },
+          headerTitleStyle: { color: 'black', fontSize: 20, fontWeight: '600' },
           headerLeft: () => (
             <TouchableOpacity 
               style={{ marginLeft: 16 }}
@@ -124,12 +124,12 @@ export default function CustomersPage() {
                 }
               }}
             >
-              <Ionicons name="arrow-back" size={24} color="white" />
+              <Entypo name="chevron-left" size={28} color="black" />
             </TouchableOpacity>
           ),
           headerRight: () => (
             <TouchableOpacity style={styles.notificationIcon}>
-              <Ionicons name="notifications-outline" size={24} color="white" />
+              <Ionicons name="notifications-outline" size={24} color="black" />
             </TouchableOpacity>
           ),
         }}

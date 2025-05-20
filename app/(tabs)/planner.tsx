@@ -1,508 +1,615 @@
-import { JSX, useState } from 'react';
-// BEFORE: import { Calendar, X } from 'lucide-react';
-// AFTER:
-import { Calendar, X } from 'lucide-react-native'; // Changed this line
-import { View, Text, Button, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'; // Assuming you might need these for styling if not using a web-view like component structure
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    Modal,
+    TextInput,
+    StyleSheet,
+    ScrollView,
+    SafeAreaView,
+    FlatList,
+    Platform,
+    KeyboardAvoidingView,
+    TouchableWithoutFeedback,
+    Keyboard,
+    Image
+} from 'react-native';
+import { Entypo } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { router, Stack, useRouter } from 'expo-router';
 
-// Types for our request data
-type RequestStatus = 'Pending' | 'Approved' | 'Completed' | 'Cancelled';
+const NOTE_STORAGE_KEY = 'plannerNotes';
 
-interface DroneRequest {
-  id: string;
-  farmName: string;
-  fieldSize: number; // Assuming acres
-  requestType: 'Mapping' | 'Spraying' | 'Monitoring';
-  date: Date;
-  status: RequestStatus;
-  notes?: string;
-}
+export default function Planner() {
+    const navigation = useNavigation();
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [notes, setNotes] = useState({});
+    const [showNoteModal, setShowNoteModal] = useState(false);
+    const [noteText, setNoteText] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
 
-// Mock data for demonstration
-const initialRequests: DroneRequest[] = [
-  {
-    id: '001',
-    farmName: 'Green Valley Farm',
-    fieldSize: 25,
-    requestType: 'Mapping',
-    date: new Date(2025, 4, 15), // Month is 0-indexed, so 4 is May
-    status: 'Pending'
-  },
-  {
-    id: '002',
-    farmName: 'Sunrise Orchards',
-    fieldSize: 15,
-    requestType: 'Spraying',
-    date: new Date(2025, 4, 18),
-    status: 'Approved'
-  },
-  {
-    id: '003',
-    farmName: 'Golden Fields',
-    fieldSize: 40,
-    requestType: 'Monitoring',
-    date: new Date(2025, 4, 22),
-    status: 'Completed'
-  }
-];
+    useEffect(() => {
+        loadNotes();
+    }, []);
 
-export default function AgriDronePlannerPage() {
-  const [requests, setRequests] = useState<DroneRequest[]>(initialRequests);
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    useEffect(() => {
+        saveNotes();
+    }, [notes]);
 
-  // Calendar utilities
-  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+    const loadNotes = async () => {
+        try {
+            const storedNotes = await AsyncStorage.getItem(NOTE_STORAGE_KEY);
+            if (storedNotes) {
+                setNotes(JSON.parse(storedNotes));
+            }
+        } catch (error) {
+            console.error('Failed to load notes:', error);
+        }
+    };
 
-  const monthYear = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const saveNotes = async () => {
+        try {
+            await AsyncStorage.setItem(NOTE_STORAGE_KEY, JSON.stringify(notes));
+        } catch (error) {
+            console.error('Failed to save notes:', error);
+        }
+    };
 
-  const prevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
-  };
+    // Memoized month and year strings for performance
+    const { monthName, year, daysArray, firstDayOfMonth } = useMemo(() => {
+        const monthName = currentMonth.toLocaleString('default', { month: 'long' });
+        const year = currentMonth.getFullYear();
 
-  const nextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
-  };
+        // Get first day of month (0-6 where 0 is Sunday)
+        const firstDayOfMonth = new Date(
+            currentMonth.getFullYear(),
+            currentMonth.getMonth(),
+            1
+        ).getDay();
 
-  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        // Adjust to make Monday the first day (0 index)
+        const adjustedFirstDay = (firstDayOfMonth + 6) % 7;
 
-  // Helper to check if a date has requests
-  const hasRequests = (date: Date) => {
-    return requests.some(req =>
-      req.date.getDate() === date.getDate() &&
-      req.date.getMonth() === date.getMonth() &&
-      req.date.getFullYear() === date.getFullYear()
-    );
-  };
+        const daysInMonth = new Date(
+            currentMonth.getFullYear(),
+            currentMonth.getMonth() + 1,
+            0
+        ).getDate();
 
-  // Get requests for selected date
-  const getRequestsForDate = (date: Date | null) => {
-    if (!date) return [];
-    return requests.filter(req =>
-      req.date.getDate() === date.getDate() &&
-      req.date.getMonth() === date.getMonth() &&
-      req.date.getFullYear() === date.getFullYear()
-    );
-  };
+        const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  const handleDateClick = (day: number) => {
-    const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-    setSelectedDate(newDate);
-  };
+        return { monthName, year, daysArray, firstDayOfMonth: adjustedFirstDay };
+    }, [currentMonth]);
 
-  const handleDeleteRequest = (id: string) => {
-    setRequests(requests.filter(req => req.id !== id));
-  };
+    // Weekday headers
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  const renderCalendar = () => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    const daysCount = daysInMonth(year, month);
-    const firstDay = firstDayOfMonth(year, month);
+    // Handle month navigation
+    const previousMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+    };
 
-    let calendarDays: JSX.Element[] = [];
+    const nextMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+    };
 
-    // Add empty cells for days before the 1st of the month
-    for (let i = 0; i < firstDay; i++) {
-      calendarDays.push(
-        <View key={`empty-${i}`} style={styles.calendarCellEmpty}></View>
-      );
-    }
+    // Clear selected date
+    const handleClear = () => {
+        setSelectedDate(null);
+        setShowNoteModal(false);
+    };
 
-    // Add cells for each day of the month
-    for (let day = 1; day <= daysCount; day++) {
-      const date = new Date(year, month, day);
-      const hasRequestsOnDay = hasRequests(date);
-      const isSelected = selectedDate &&
-        date.getDate() === selectedDate.getDate() &&
-        date.getMonth() === selectedDate.getMonth() &&
-        date.getFullYear() === selectedDate.getFullYear();
+    // Create or update a note for the selected date
+    const handleSaveNote = () => {
+        if (selectedDate && noteText.trim()) {
+            const dateKey = `${currentMonth.getMonth() + 1}-${selectedDate}-${currentMonth.getFullYear()}`;
+            setNotes(prevNotes => ({
+                ...prevNotes,
+                [dateKey]: noteText
+            }));
+            setNoteText('');
+            setShowNoteModal(false);
+            setIsEditing(false);
+        }
+    };
 
-      calendarDays.push(
-        <TouchableOpacity
-          key={`day-${day}`}
-          style={[
-            styles.calendarCell,
-            isSelected && styles.selectedCell,
-            hasRequestsOnDay && !isSelected && styles.hasRequestsCell
-          ]}
-          onPress={() => handleDateClick(day)}
-        >
-          <Text style={[isSelected && styles.selectedCellText]}>{day}</Text>
-        </TouchableOpacity>
-      );
-    }
-    return calendarDays;
-  };
+    // Delete a note
+    const handleDeleteNote = () => {
+        if (selectedDate) {
+            const dateKey = `${currentMonth.getMonth() + 1}-${selectedDate}-${currentMonth.getFullYear()}`;
+            const newNotes = { ...notes };
+            delete newNotes[dateKey];
+            setNotes(newNotes);
+            setNoteText('');
+            setShowNoteModal(false);
+            setIsEditing(false);
+        }
+    };
 
-  const dailyRequests = getRequestsForDate(selectedDate);
-  const totalFieldSize = dailyRequests.reduce((sum, req) => sum + req.fieldSize, 0);
+    // Check if a date has a note
+    const hasNote = (day) => {
+        const dateKey = `${currentMonth.getMonth() + 1}-${day}-${currentMonth.getFullYear()}`;
+        return notes[dateKey];
+    };
 
-  // Note: The className props for styling (Tailwind CSS) will not work directly in React Native.
-  // You'll need to translate them to React Native StyleSheet objects or use a library
-  // that allows Tailwind-like syntax for React Native (e.g., NativeWind).
-  // For brevity, this example will keep the structure but styling will need to be adapted.
+    // Select a date to create or view a note
+    const handleDateClick = (day) => {
+        setSelectedDate(day);
+        const dateKey = `${currentMonth.getMonth() + 1}-${day}-${currentMonth.getFullYear()}`;
+        setNoteText(notes[dateKey] || '');
+        setIsEditing(!!notes[dateKey]);
+        setShowNoteModal(true);
+    };
 
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => setSelectedDate(null)}
-          >
-            <Calendar size={20} color="#007AFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Drone Flight Planner</Text>
-        </View>
-        <TouchableOpacity style={styles.newRequestButton}>
-          <Text style={styles.newRequestButtonText}>New Request</Text>
-        </TouchableOpacity>
-      </View>
+    // Render calendar days in a grid
+    const renderCalendarDays = () => {
+        const totalDays = daysArray.length;
+        const totalCells = Math.ceil((firstDayOfMonth + totalDays) / 7) * 7;
+        const cells = [];
 
-      {/* Main content */}
-      <View style={styles.mainContent}>
-        {/* Calendar */}
-        <View style={styles.calendarContainer}>
-          <Text style={styles.sectionTitle}>All Requests</Text>
+        // Add empty cells for days before the first of the month
+        for (let i = 0; i < firstDayOfMonth; i++) {
+            cells.push(<View key={`empty-${i}`} style={styles.emptyDay} />);
+        }
 
-          <View style={styles.calendarNav}>
-            <TouchableOpacity onPress={prevMonth}>
-              <Text style={styles.navButtonText}>&lt;</Text>
-            </TouchableOpacity>
-            <Text style={styles.monthYearText}>{monthYear}</Text>
-            <TouchableOpacity onPress={nextMonth}>
-              <Text style={styles.navButtonText}>&gt;</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.daysOfWeekContainer}>
-            {daysOfWeek.map(day => (
-              <Text key={day} style={styles.dayOfWeekText}>
-                {day}
-              </Text>
-            ))}
-          </View>
-
-          <View style={styles.calendarGrid}>
-            {renderCalendar()}
-          </View>
-
-          <View style={styles.statsContainer}>
-            <Text style={styles.sectionTitle}>Total Requests</Text>
-            <View style={styles.statsGrid}>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>{requests.length}</Text>
-                <Text style={styles.statLabel}>Total</Text>
-              </View>
-              <View style={[styles.statBox, styles.pendingStatBox]}>
-                <Text style={styles.statValue}>
-                  {requests.filter(r => r.status === 'Pending').length}
-                </Text>
-                <Text style={styles.statLabel}>Pending</Text>
-              </View>
-              <View style={[styles.statBox, styles.doneStatBox]}>
-                <Text style={styles.statValue}>
-                  {requests.filter(r => r.status === 'Completed').length}
-                </Text>
-                <Text style={styles.statLabel}>Done</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Daily schedule */}
-        <ScrollView style={styles.dailyScheduleContainer}>
-          {selectedDate ? (
-            <>
-              <Text style={styles.sectionTitle}>
-                {selectedDate.toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </Text>
-
-              {dailyRequests.length > 0 ? (
-                <>
-                  <View style={styles.dailySummary}>
-                    <Text style={styles.dailySummaryText}>
-                      {dailyRequests.length} requests | {totalFieldSize} acres total
+        // Add day cells
+        daysArray.forEach(day => {
+            cells.push(
+                <TouchableOpacity
+                    key={day}
+                    onPress={() => handleDateClick(day)}
+                    style={[
+                        styles.dayButton,
+                        selectedDate === day && styles.selectedDay,
+                        hasNote(day) && styles.hasNoteDay
+                    ]}
+                    activeOpacity={0.7}
+                >
+                    <Text style={[
+                        styles.dayText,
+                        selectedDate === day && styles.selectedDayText
+                    ]}>
+                        {day}
                     </Text>
-                  </View>
+                    {hasNote(day) && <View style={styles.noteIndicator} />}
+                </TouchableOpacity>
+            );
+        });
 
-                  <View>
-                    {dailyRequests.map(request => (
-                      <View key={request.id} style={styles.requestItem}>
-                        <View style={styles.requestItemHeader}>
-                          <Text style={styles.requestFarmName}>{request.farmName}</Text>
-                          <View style={styles.requestStatusContainer}>
-                            <Text style={[
-                              styles.statusBadge,
-                              request.status === 'Pending' && styles.statusPending,
-                              request.status === 'Approved' && styles.statusApproved,
-                              request.status === 'Completed' && styles.statusCompleted,
-                              request.status === 'Cancelled' && styles.statusCancelled,
-                            ]}>
-                              {request.status}
-                            </Text>
-                            <TouchableOpacity onPress={() => handleDeleteRequest(request.id)}>
-                              <X size={16} color="#6B7280" />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                        <View style={styles.requestDetails}>
-                          <View>
-                            <Text><Text style={styles.detailLabel}>Type:</Text> {request.requestType}</Text>
-                          </View>
-                          <View>
-                            <Text><Text style={styles.detailLabel}>Field size:</Text> {request.fieldSize} acres</Text>
-                          </View>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                </>
-              ) : (
-                <View style={styles.emptyStateContainer}>
-                  <View style={styles.emptyStateIconCircle}>
-                    <X size={32} color="#007AFF" />
-                  </View>
-                  <Text style={styles.emptyStateText}>No flights scheduled</Text>
-                  <TouchableOpacity>
-                    <Text style={styles.addNewRequestText}>+ Add new request</Text>
-                  </TouchableOpacity>
+        // Add empty cells to complete the grid
+        while (cells.length < totalCells) {
+            cells.push(<View key={`empty-end-${cells.length}`} style={styles.emptyDay} />);
+        }
+
+        // Split into rows of 7
+        const rows = [];
+        for (let i = 0; i < cells.length; i += 7) {
+            rows.push(
+                <View key={`row-${i}`} style={styles.calendarRow}>
+                    {cells.slice(i, i + 7)}
                 </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.emptyStateContainer}>
-              <View style={styles.emptyStateIconCircle}>
-                <Calendar size={32} color="#007AFF" />
-              </View>
-              <Text style={styles.emptyStateText}>Select a date to view scheduled flights</Text>
-            </View>
-          )}
-        </ScrollView>
-      </View>
-    </View>
-  );
+            );
+        }
+
+        return rows;
+    };
+
+    // Format notes for display in the FlatList
+    const formattedNotes = useMemo(() => {
+        return Object.entries(notes).map(([dateKey, note]) => {
+            const [month, day, year] = dateKey.split('-');
+            return {
+                id: dateKey,
+                date: `${month}/${day}/${year}`,
+                text: String(note)
+            };
+        }).sort((a, b) => new Date(b.id) - new Date(a.id)); // Sort by date descending
+    }, [notes]);
+
+    return (
+        <SafeAreaView style={styles.container}>
+          {/* Stack Screen with Header Configuration */}
+      <Stack.Screen 
+        options={{
+          title: 'Planner',
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()}>
+              <Entypo
+                    name="chevron-left"
+                    size={28}
+                    color="black"
+                    style={{ marginLeft: 10 }} // or marginRight, marginVertical, etc.
+               />
+
+            </TouchableOpacity>
+          ),
+          headerTitleStyle: {
+            color: 'black',
+            fontWeight: '600',
+          },
+        }}
+      />
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* Calendar Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>All Requests</Text>
+
+                    {/* Calendar */}
+                    <View style={styles.calendarContainer}>
+                        <View style={styles.monthSelector}>
+                            <TouchableOpacity
+                                onPress={previousMonth}
+                                style={styles.monthNavButton}
+                                activeOpacity={0.7}
+                            >
+                                <Entypo name="chevron-left" size={20} color="#1E293B" />
+                            </TouchableOpacity>
+                            <Text style={styles.monthTitle}>{`${monthName} ${year}`}</Text>
+                            <TouchableOpacity
+                                onPress={nextMonth}
+                                style={styles.monthNavButton}
+                                activeOpacity={0.7}
+                            >
+                                <Entypo name="chevron-right" size={20} color="#1E293B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Weekdays header */}
+                        <View style={styles.weekdaysRow}>
+                            {weekdays.map((day) => (
+                                <Text key={day} style={styles.weekdayText}>
+                                    {day}
+                                </Text>
+                            ))}
+                        </View>
+
+                        {/* Days grid */}
+                        <View style={styles.calendarGrid}>
+                            {renderCalendarDays()}
+                        </View>
+
+                        {/* Clear button */}
+                        <View style={styles.clearButtonContainer}>
+                            <TouchableOpacity
+                                onPress={handleClear}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={styles.clearButtonText}>Clear Selection</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Notes Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Total Requests</Text>
+
+                    {formattedNotes.length === 0 ? (
+                        <View style={styles.noDataContainer}>
+                            <Image
+                                source={require('../../assets/images/No-data-found.png')}
+                                style={styles.noDataImage}
+                                resizeMode="contain"
+                            />
+                            <Text style={styles.noDataText}>No Requests Found</Text>
+                        </View>
+                    ) : (
+                        <View style={styles.notesContainer}>
+                            <Text style={styles.notesTitle}>Your Requests</Text>
+                            <FlatList
+                                data={formattedNotes}
+                                keyExtractor={(item) => item.id}
+                                scrollEnabled={false}
+                                renderItem={({ item }) => (
+                                    <View style={styles.noteItem}>
+                                        <Text style={styles.noteDate}>{item.date}</Text>
+                                        <Text style={styles.noteText}>{item.text}</Text>
+                                    </View>
+                                )}
+                                ItemSeparatorComponent={() => <View style={styles.noteSeparator} />}
+                            />
+                        </View>
+                    )}
+                </View>
+            </ScrollView>
+
+            {/* Note Creation/Editing Modal */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={showNoteModal}
+                onRequestClose={() => setShowNoteModal(false)}
+            >
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <KeyboardAvoidingView
+                        style={styles.modalOverlay}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    >
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>
+                                {`${isEditing ? 'Edit' : 'Create'} Request for ${monthName} ${selectedDate}, ${year}`}
+                            </Text>
+
+                            <TextInput
+                                style={styles.noteInput}
+                                value={noteText}
+                                onChangeText={setNoteText}
+                                placeholder="Enter your request here..."
+                                placeholderTextColor="#94A3B8"
+                                multiline={true}
+                                textAlignVertical="top"
+                                autoFocus={true}
+                            />
+
+                            <View style={styles.modalButtons}>
+                                {isEditing && (
+                                    <TouchableOpacity
+                                        style={[styles.modalButton, styles.deleteButton]}
+                                        onPress={handleDeleteNote}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.deleteButtonText}>Delete</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.cancelButton]}
+                                    onPress={() => setShowNoteModal(false)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.saveButton]}
+                                    onPress={handleSaveNote}
+                                    activeOpacity={0.7}
+                                    disabled={!noteText.trim()}
+                                >
+                                    <Text style={styles.saveButtonText}>
+                                        {isEditing ? 'Update' : 'Save'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </KeyboardAvoidingView>
+                </TouchableWithoutFeedback>
+            </Modal>
+        </SafeAreaView>
+    );
 }
 
-// Basic StyleSheet for React Native. You'll need to expand this significantly
-// to match the Tailwind CSS styling or use a library like NativeWind.
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFF', // Replaces max-w-4xl mx-auto bg-white rounded-lg shadow
-    // Shadow and rounded corners need platform-specific handling or View props
+    container: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingBottom: 24,
+    },
+    // Removed header styles here
+    section: {
+        marginHorizontal: 16,
+        marginTop: 16,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 16,
+        color: '#1E293B',
+    },
+    calendarContainer: {
+        marginTop: 8,
+    },
+    monthSelector: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    monthNavButton: {
+        padding: 8,
+    },
+    monthTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1E293B',
+    },
+    weekdaysRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginBottom: 12,
+    },
+    weekdayText: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: '#64748B',
+        textAlign: 'center',
+        width: 36,
+    },
+    calendarGrid: {
+        marginBottom: 8,
+    },
+    calendarRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginBottom: 8,
+    },
+    emptyDay: {
+        width: 36,
+        height: 36,
+        margin: 2,
+    },
+    dayButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        margin: 2,
+        position: 'relative',
+    },
+    dayText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#1E293B',
+    },
+    selectedDay: {
+        backgroundColor: '#3B82F6',
+    },
+    selectedDayText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+    },
+    hasNoteDay: {
+        borderWidth: 1.5,
+        borderColor: '#3B82F6',
+    },
+    noteIndicator: {
+        position: 'absolute',
+        bottom: 2,
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: '#3B82F6',
+    },
+    clearButtonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        marginTop: 8,
+    },
+    clearButtonText: {
+        color: '#64748B',
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    noDataContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 40,
+    },
+    noDataImage: {
+        width: 150,
+        height: 150,
+        marginBottom: 16,
+    },
+    noDataText: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#64748B',
+    },
+    notesContainer: {
+        marginTop: 8,
+    },
+    notesTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1E293B',
+        marginBottom: 12,
+    },
+    noteItem: {
+        paddingVertical: 12,
+    },
+    noteDate: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#3B82F6',
+        marginBottom: 4,
+    },
+    noteText: {
+        fontSize: 14,
+        color: '#334155',
+        lineHeight: 20,
+    },
+    noteSeparator: {
+        height: 1,
+        backgroundColor: '#E2E8F0',
+        marginVertical: 8,
+    },
+    modalOverlay: {
+        flex:1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 16,
   },
-  header: {
-    borderBottomWidth: 1,
-    borderColor: '#E5E7EB', // border-b
-    padding: 16, // p-4
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    // space-x-2 would need margin on one element
-  },
-  iconButton: {
-    // hover:bg-gray-100 p-2 rounded-full - Hover needs special handling
-    padding: 8,
-    borderRadius: 9999,
-    marginRight: 8, // for space-x-2
-  },
-  headerTitle: {
-    fontSize: 20, // text-xl
-    fontWeight: '600', // font-semibold
-  },
-  newRequestButton: {
-    backgroundColor: '#007AFF', // bg-blue-500
-    paddingHorizontal: 16, // px-4
-    paddingVertical: 8,   // py-2
-    borderRadius: 6,      // rounded-md
-    // hover:bg-blue-600 - Hover needs special handling
-  },
-  newRequestButtonText: {
-    color: '#FFF', // text-white
-  },
-  mainContent: {
-    flex: 1,
-    flexDirection: 'row', // flex (assuming horizontal layout like web)
-  },
-  calendarContainer: {
-    width: 256, // w-64
-    borderRightWidth: 1,
-    borderColor: '#E5E7EB', // border-r
-    padding: 16, // p-4
-  },
-  sectionTitle: {
-    fontWeight: '500', // font-medium
-    marginBottom: 16, // mb-4 or mb-2
-  },
-  calendarNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16, // mb-4
-    alignItems: 'center',
-  },
-  navButtonText: {
-    color: '#4B5563', // text-gray-600
-    // hover:text-gray-900
+  modalTitle: {
     fontSize: 18,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: 16,
   },
-  monthYearText: {
-    fontWeight: '500', // font-medium
-  },
-  daysOfWeekContainer: {
-    flexDirection: 'row', // grid grid-cols-7
-    // gap-1 needs margins on children
-    marginBottom: 8, // mb-2
-  },
-  dayOfWeekText: {
-    flex: 1, // Part of grid-cols-7
-    textAlign: 'center',
-    fontSize: 10, // text-xs
-    color: '#6B7280', // text-gray-500
-  },
-  calendarGrid: {
-    flexDirection: 'row', // grid
-    flexWrap: 'wrap',     // grid
-    // gap-1 needs margins on children
-  },
-  calendarCell: {
-    width: (256 - 32 - 6 * 4) / 7, // Approximate w-8 based on container width, padding, and gap
-    height: (256 - 32 - 6 * 4) / 7, // Approximate h-8
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 9999, // rounded-full
-    // hover:bg-blue-100
-    margin: 2, // for gap-1
-  },
-  calendarCellEmpty: {
-    width: (256 - 32 - 6 * 4) / 7,
-    height: (256 - 32 - 6 * 4) / 7,
-    margin: 2,
-  },
-  selectedCell: {
-    backgroundColor: '#007AFF', // bg-blue-500
-  },
-  selectedCellText: {
-    color: '#FFF', // text-white
-  },
-  hasRequestsCell: {
-    borderWidth: 2,
-    borderColor: '#007AFF', // border-2 border-blue-500
-  },
-  statsContainer: {
-    marginTop: 24, // mt-6
-    borderTopWidth: 1,
-    borderColor: '#E5E7EB', // border-t
-    paddingTop: 16, // pt-4
-  },
-  statsGrid: {
-    flexDirection: 'row', // grid grid-cols-3
-    // gap-2 needs margins
-    justifyContent: 'space-around', // to simulate gap
-  },
-  statBox: {
-    backgroundColor: '#F9FAFB', // bg-gray-50
-    padding: 8, // p-2
-    borderRadius: 4, // rounded
-    alignItems: 'center', // text-center
-    flex: 1, // for distribution
-    marginHorizontal: 4, // for gap-2
-  },
-  pendingStatBox: {
-    backgroundColor: '#FEF3C7', // bg-yellow-50
-  },
-  doneStatBox: {
-    backgroundColor: '#D1FAE5', // bg-green-50
-  },
-  statValue: {
-    fontSize: 18, // text-lg
-    fontWeight: '500', // font-medium
-  },
-  statLabel: {
-    fontSize: 10, // text-xs
-    color: '#6B7280', // text-gray-500
-  },
-  dailyScheduleContainer: {
-    flex: 1,
-    padding: 16, // p-4
-  },
-  dailySummary: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8, // mb-2
-  },
-  dailySummaryText: {
-    fontSize: 12, // text-sm
-    color: '#6B7280', // text-gray-500
-  },
-  requestItem: {
+  noteInput: {
     borderWidth: 1,
-    borderColor: '#E5E7EB', // border
-    borderRadius: 8, // rounded-lg
-    padding: 12, // p-3
-    marginBottom: 12, // space-y-3 -> applied as margin bottom
-    // hover:shadow-sm - Shadow needs elevation prop or similar
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 120,
+    maxHeight: 200,
+    fontSize: 14,
+    color: '#1E293B',
+    backgroundColor: '#F8FAFC',
+    marginBottom: 16,
   },
-  requestItemHeader: {
+  modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+    gap: 8,
   },
-  requestFarmName: {
-    fontWeight: '500', // font-medium
-  },
-  requestStatusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    // space-x-2 -> margin
-  },
-  statusBadge: {
-    fontSize: 10, // text-xs
-    paddingHorizontal: 8, // px-2
-    paddingVertical: 4,   // py-1
-    borderRadius: 4,    // rounded
-    marginRight: 8, // for space-x-2
-  },
-  statusPending: { backgroundColor: '#FEF3C7', color: '#92400E' }, // bg-yellow-100 text-yellow-800
-  statusApproved: { backgroundColor: '#DBEAFE', color: '#1E40AF' }, // bg-blue-100 text-blue-800
-  statusCompleted: { backgroundColor: '#D1FAE5', color: '#065F46' }, // bg-green-100 text-green-800
-  statusCancelled: { backgroundColor: '#FEE2E2', color: '#991B1B' }, // bg-red-100 text-red-800
-  requestDetails: {
-    marginTop: 8, // mt-2
-    flexDirection: 'row', // grid grid-cols-2
-    // gap-2
-    justifyContent: 'space-between',
-  },
-  detailLabel: {
-    color: '#6B7280', // text-gray-500
-  },
-  emptyStateContainer: {
-    flex: 1, // To take available space if parent has flex:1
+  modalButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    // h-64 is not directly translatable without fixed height on parent or flex:1
-    paddingVertical: 64, // Simulate some height
+    minWidth: 80,
   },
-  emptyStateIconCircle: {
-    width: 96, // w-24
-    height: 96, // h-24
-    backgroundColor: '#EFF6FF', // bg-blue-50
-    borderRadius: 48, // rounded-full
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16, // mb-4
+  cancelButton: {
+    backgroundColor: '#F1F5F9',
   },
-  emptyStateText: {
-    color: '#6B7280', // text-gray-500
+  cancelButtonText: {
+    color: '#64748B',
+    fontWeight: '500',
   },
-  addNewRequestText: {
-    marginTop: 16, // mt-4
-    color: '#007AFF', // text-blue-500
-    // hover:text-blue-700
+  saveButton: {
+    backgroundColor: '#3B82F6',
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  deleteButton: {
+    backgroundColor: '#FEE2E2',
+    marginRight: 'auto',
+  },
+  deleteButtonText: {
+    color: '#DC2626',
+    fontWeight: '500',
   },
 });

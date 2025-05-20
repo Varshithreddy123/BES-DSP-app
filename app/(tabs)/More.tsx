@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Ionicons, MaterialIcons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, FontAwesome5, MaterialCommunityIcons, Entypo } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 
 const menuOptions = [
@@ -19,7 +19,7 @@ export default function More() {
 
   const handleNavigation = (path: string, title: string) => {
     console.log(`Navigating to ${title}`);
-    router.push(path);
+    router.push(path as any);
   };
 
   const renderIcon = (item: { id?: number; title?: string; icon: any; type: any; path?: string; }) => {
@@ -48,12 +48,13 @@ export default function More() {
           title: 'More Options',
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()}>
-              <Ionicons 
-                name="arrow-back" 
-                size={24} 
-                color="black" 
-                style={{ marginLeft: 15 }}
-              />
+              <Entypo
+                    name="chevron-left"
+                    size={28}
+                    color="black"
+                    style={{ marginLeft: 10 }} // or marginRight, marginVertical, etc.
+               />
+
             </TouchableOpacity>
           ),
           headerTitleStyle: {
